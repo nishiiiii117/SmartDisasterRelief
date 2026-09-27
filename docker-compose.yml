@@ -1,0 +1,85 @@
+# Local Smart Disaster Relief stack
+name: smart-disaster-relief
+
+x-svc-env: &svc-env
+  MQTT_URL: mqtts://broker:8883
+  NODE_EXTRA_CA_CERTS: /certs/ca.crt
+  AWS_EC2_METADATA_DISABLED: "true"
+
+services:
+  certgen:
+    image: alpine/openssl
+    entrypoint: ["/bin/sh", "/certgen.sh"]
+    volumes:
+      - certs:/certs
+      - ./docker/certgen.sh:/certgen.sh:ro
+
+  broker:
+    image: eclipse-mosquitto:2.0
+    ports:
+      - "8883:8883"
+    depends_on:
+      certgen:
+        condition: service_completed_successfully
+    volumes:
+      - certs:/certs:ro
+      - ./docker/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-h", "localhost", "-p", "8883", "--cafile", "/certs/ca.crt", "--insecure", "-t", "$$SYS/broker/version", "-C", "1", "-W", "3"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+
+  emergency:
+    build: ./Emergency_Request_Service
+    init: true
+    environment: *svc-env
+    volumes:
+      - certs:/certs:ro
+    ports:
+      - "3001:3001"
+    depends_on:
+      broker:
+        condition: service_healthy
+
+  priority:
+    build:
+      context: ./Priority_Service
+      dockerfile: Dockerfile.slim
+    init: true
+    environment: *svc-env
+    volumes:
+      - certs:/certs:ro
+    deploy:
+      replicas: ${PRIORITY_REPLICAS:-1}
+    depends_on:
+      broker:
+        condition: service_healthy
+
+  rescue:
+    build: ./Rescue_Service
+    init: true
+    environment:
+      <<: *svc-env
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - certs:/certs:ro
+    deploy:
+      replicas: ${RESCUE_REPLICAS:-1}
+    depends_on:
+      broker:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  certs:
