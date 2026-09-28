@@ -15,3 +15,4 @@ crash.log
 infra/terraform/build/
 
 **/tfplan
+**/tfplan*
