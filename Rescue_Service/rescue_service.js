@@ -3,9 +3,9 @@ const mqtt = require("mqtt");
 const { createClient } = require("redis");
 
 // Connect to the MQTT broker configured for this environment
-const mqttClient = mqtt.connect(
-    process.env.MQTT_URL || "mqtts://localhost:8883"
-);
+const mqttClient = mqtt.connect(process.env.MQTT_URL, {
+    rejectUnauthorized: false
+});
 
 const redisClient = createClient({
     url: process.env.REDIS_URL || "redis://localhost:6379"
