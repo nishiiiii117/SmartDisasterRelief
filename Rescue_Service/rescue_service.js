@@ -14,6 +14,18 @@ const redisClient = createClient({
 // A separate Redis connection is used when waiting for an available rescue team
 const teamClient = redisClient.duplicate();
 
+mqttClient.on("error", (error) => {
+    console.error("MQTT connection error:", error.message);
+});
+
+mqttClient.on("offline", () => {
+    console.error("MQTT client offline");
+});
+
+mqttClient.on("reconnect", () => {
+    console.log("MQTT reconnecting...");
+});
+
 const teamTypes = [
     "CHILD_TRAPPED",
     "MEDICAL_EMERGENCY",
